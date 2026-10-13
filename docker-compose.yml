@@ -1,0 +1,11 @@
+name: fusion-usage-dashboard
+
+services:
+  web:
+    build: .
+    image: fusion-usage-dashboard:latest
+    ports:
+      - "80"
+    env_file:
+      - .env.docker
+    restart: unless-stopped

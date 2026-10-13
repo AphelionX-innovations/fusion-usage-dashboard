@@ -35,14 +35,6 @@ export type TimeseriesSubject = {
   tenantName: string | null;
 };
 
-export type TopUser = {
-  userId: string | null;
-  userName: string | null;
-  tenantId: string | null;
-  tenantName: string | null;
-  traceCount: number;
-};
-
 export type Granularity = "hour" | "day" | "week";
 
 export type UsageRange = {

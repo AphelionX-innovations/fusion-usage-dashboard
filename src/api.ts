@@ -4,14 +4,23 @@ import type {
   Granularity,
   Session,
   TimeseriesSubject,
-  TopUser,
   TraceBucket,
   UsageProject,
   UsageRange,
 } from "./types";
 
-const authBase = import.meta.env.VITE_AUTH_API_URL ?? "/auth-api";
-const fusionBase = import.meta.env.VITE_FUSION_API_URL ?? "/fusion-api";
+function apiBase(runtimeValue: string | undefined, buildValue: string | undefined, fallback: string) {
+  const value = (runtimeValue || buildValue || fallback).trim().replace(/\/+$/, "");
+  return value || fallback;
+}
+
+const runtime = window.__APP_CONFIG__;
+const authBase = apiBase(runtime?.VITE_AUTH_API_URL, import.meta.env.VITE_AUTH_API_URL, "/auth-api");
+const fusionBase = apiBase(
+  runtime?.VITE_FUSION_API_URL,
+  import.meta.env.VITE_FUSION_API_URL,
+  "/fusion-api",
+);
 
 export class ApiError extends Error {
   status: number;
@@ -162,15 +171,39 @@ export async function fetchTimeseries(
   return { subject: hasSubject ? subject : null, data };
 }
 
-export async function fetchTopUsers(
+type AuthNameRow = {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+};
+
+export async function fetchAuthNames(
   token: string,
-  range: UsageRange,
-  limit: number,
-): Promise<TopUser[]> {
-  const body = await getUsage<{ data: TopUser[] }>(
-    token,
-    "/api/auth/usage/top-users",
-    usageQuery(range, { limit: String(limit) }),
-  );
-  return body.data;
+  ids: string[],
+): Promise<Record<string, string>> {
+  const names: Record<string, string> = {};
+  for (let index = 0; index < ids.length; index += 100) {
+    const chunk = ids.slice(index, index + 100);
+    let response: Response;
+    try {
+      response = await fetch(`${authBase}/api/v1/users/by-ids`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ids: chunk }),
+      });
+    } catch {
+      return names;
+    }
+    if (!response.ok) return names;
+    const rows = (await response.json()) as AuthNameRow[];
+    for (const row of rows) {
+      const full = [row.firstName, row.lastName].filter(Boolean).join(" ").trim();
+      names[row.id] = full || row.email || "";
+    }
+  }
+  return names;
 }

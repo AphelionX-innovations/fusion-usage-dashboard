@@ -1,16 +1,31 @@
-import { useEffect, useState } from "react";
-import { ApiError, fetchProjects, fetchTimeseries, fetchTopUsers, logout } from "./api";
-import {
-  defaultFromDate,
-  defaultToDate,
-  formatCount,
-  personName,
-  rangeError,
-  toRangeBounds,
-} from "./format";
-import { ProjectsTable } from "./ProjectsTable";
-import type { Granularity, Session, TimeseriesSubject, TopUser, TraceBucket, UsageProject } from "./types";
-import { UsageCharts } from "./UsageCharts";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ApiError, fetchAuthNames, fetchProjects, fetchTimeseries, logout } from "./api";
+import { StatusChart, TenantChart, TopEntitiesChart } from "./BreakdownCharts";
+import { defaultFromDate, defaultToDate, isoDate, personName, rangeError } from "./format";
+import { KpiStrip } from "./KpiStrip";
+import { buildEntities, summarize, tenantBreakdown, usageSignals } from "./metrics";
+import { buildPeriods, fillSeries } from "./periods";
+import { SignalsCard } from "./SignalsCard";
+import { TrendChart } from "./TrendChart";
+import type { Granularity, Session, TraceBucket, UsageProject } from "./types";
+import { UsageTable } from "./UsageTable";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const PRESETS = [7, 30, 90];
+
+type ProjectData = {
+  current: UsageProject[];
+  previous: UsageProject[];
+  authNames: Record<string, string>;
+};
+
+type SeriesData = {
+  granularity: Granularity;
+  current: TraceBucket[];
+  previous: TraceBucket[];
+};
+
+const EMPTY_PROJECTS: ProjectData = { current: [], previous: [], authNames: {} };
 
 type DashboardPageProps = {
   session: Session;
@@ -18,80 +33,101 @@ type DashboardPageProps = {
 };
 
 export function DashboardPage({ session, onLogout }: DashboardPageProps) {
+  const token = session.accessToken;
   const [fromDate, setFromDate] = useState(defaultFromDate);
   const [toDate, setToDate] = useState(defaultToDate);
   const [granularity, setGranularity] = useState<Granularity>("day");
-  const [limit, setLimit] = useState(5);
   const [userId, setUserId] = useState<string | null>(null);
-  const [projects, setProjects] = useState<UsageProject[]>([]);
-  const [series, setSeries] = useState<TraceBucket[]>([]);
-  const [subject, setSubject] = useState<TimeseriesSubject | null>(null);
-  const [topUsers, setTopUsers] = useState<TopUser[]>([]);
+  const [projects, setProjects] = useState<ProjectData>(EMPTY_PROJECTS);
+  const [series, setSeries] = useState<SeriesData>({ granularity: "day", current: [], previous: [] });
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(0);
+
+  const invalid = rangeError(fromDate, toDate);
+  const periods = useMemo(
+    () => (invalid ? null : buildPeriods(fromDate, toDate)),
+    [fromDate, toDate, invalid],
+  );
+
+  const fail = useCallback(
+    (caught: unknown) => {
+      if (caught instanceof ApiError && caught.status === 401) {
+        onLogout();
+        return;
+      }
+      if (caught instanceof ApiError && caught.code === "FORBIDDEN") {
+        setError("Ce compte n’est pas super-admin. Ces statistiques lui sont fermées.");
+        return;
+      }
+      setError(caught instanceof Error ? caught.message : "Chargement impossible.");
+    },
+    [onLogout],
+  );
 
   useEffect(() => {
-    const invalid = rangeError(fromDate, toDate);
-    if (invalid) {
-      setError(invalid);
-      setLoading(false);
-      return;
-    }
-
-    const { from, to } = toRangeBounds(fromDate, toDate);
-    const range = { from: from.toISOString(), to: to.toISOString() };
+    if (!periods) return;
     let cancelled = false;
-
-    async function load() {
-      setLoading(true);
-      setError(null);
-      try {
-        const [projectRows, seriesResult, topRows] = await Promise.all([
-          fetchProjects(session.accessToken, range),
-          fetchTimeseries(
-            session.accessToken,
-            range,
-            granularity,
-            userId ?? undefined,
-          ),
-          fetchTopUsers(session.accessToken, range, limit),
-        ]);
+    setLoading((count) => count + 1);
+    Promise.all([fetchProjects(token, periods.current), fetchProjects(token, periods.previous)])
+      .then(async ([current, previous]) => {
+        const ids = [...new Set(current.flatMap((project) => (project.userId ? [project.userId] : [])))];
+        const authNames = await fetchAuthNames(token, ids);
         if (cancelled) return;
-        setProjects(projectRows);
-        setSeries(seriesResult.data);
-        setSubject(seriesResult.subject);
-        setTopUsers(topRows);
-      } catch (caught) {
-        if (cancelled) return;
-        if (caught instanceof ApiError && caught.status === 401) {
-          onLogout();
-          return;
-        }
-        if (caught instanceof ApiError && caught.code === "FORBIDDEN") {
-          setError("Ce compte n’est pas super-admin. Ces statistiques lui sont fermées.");
-          return;
-        }
-        setError(caught instanceof Error ? caught.message : "Chargement impossible.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    void load();
+        setProjects({ current, previous, authNames });
+        setError(null);
+      })
+      .catch((caught) => {
+        if (!cancelled) fail(caught);
+      })
+      .finally(() => setLoading((count) => count - 1));
     return () => {
       cancelled = true;
     };
-  }, [session.accessToken, fromDate, toDate, granularity, limit, userId, onLogout]);
+  }, [token, periods, fail]);
 
-  const totalTraces = projects.reduce((sum, project) => sum + project.traceCount, 0);
-  const activeProjects = projects.filter((project) => project.traceCount > 0).length;
-  const linkedUsers = new Set(
-    projects.filter((project) => project.userId && project.traceCount > 0).map((project) => project.userId),
-  ).size;
-  const selectedName =
-    subject?.userName ||
-    projects.find((project) => project.userId === userId)?.userName ||
-    userId;
+  useEffect(() => {
+    if (!periods) return;
+    let cancelled = false;
+    setLoading((count) => count + 1);
+    Promise.all([
+      fetchTimeseries(token, periods.current, granularity, userId ?? undefined),
+      fetchTimeseries(token, periods.previous, granularity, userId ?? undefined),
+    ])
+      .then(([current, previous]) => {
+        if (cancelled) return;
+        setSeries({ granularity, current: current.data, previous: previous.data });
+      })
+      .catch((caught) => {
+        if (!cancelled) fail(caught);
+      })
+      .finally(() => setLoading((count) => count - 1));
+    return () => {
+      cancelled = true;
+    };
+  }, [token, periods, granularity, userId, fail]);
+
+  const entities = useMemo(
+    () => buildEntities({ ...projects, windowEnd: periods?.to ?? new Date() }),
+    [projects, periods],
+  );
+  const summary = summarize(entities, periods?.days ?? 1);
+  const signals = usageSignals(entities);
+  const tenants = tenantBreakdown(entities);
+  const filled = useMemo(() => {
+    if (!periods) return { current: [], previous: [] };
+    return {
+      current: fillSeries(series.current, periods.from, periods.to, series.granularity),
+      previous: fillSeries(series.previous, periods.previousFrom, periods.previousTo, series.granularity),
+    };
+  }, [series, periods]);
+  const selectedName = userId
+    ? entities.find((entity) => entity.userId === userId)?.name ?? "cet utilisateur"
+    : null;
+
+  function applyPreset(days: number) {
+    setFromDate(isoDate(new Date(Date.now() - (days - 1) * DAY_MS)));
+    setToDate(defaultToDate());
+  }
 
   async function signOut() {
     await logout(session);
@@ -99,11 +135,11 @@ export function DashboardPage({ session, onLogout }: DashboardPageProps) {
   }
 
   return (
-    <main className={`dashboard${loading ? " is-loading" : ""}`}>
+    <main className={`dashboard${loading > 0 ? " is-loading" : ""}`}>
       <header className="topbar">
         <div>
-          <p className="eyebrow">Super-admin</p>
-          <h1>Usage des traces</h1>
+          <p className="eyebrow">Super-admin · usage des traces</p>
+          <h1>Qui utilise la plateforme, et comment ça évolue</h1>
         </div>
         <div className="topbar-user">
           <span>{personName(session.user)}</span>
@@ -113,7 +149,14 @@ export function DashboardPage({ session, onLogout }: DashboardPageProps) {
         </div>
       </header>
 
-      <section className="filters card">
+      <section className="filters">
+        <div className="presets">
+          {PRESETS.map((days) => (
+            <button key={days} type="button" className="ghost small" onClick={() => applyPreset(days)}>
+              {days} jours
+            </button>
+          ))}
+        </div>
         <label>
           Du
           <input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
@@ -124,62 +167,37 @@ export function DashboardPage({ session, onLogout }: DashboardPageProps) {
         </label>
         <label>
           Granularité
-          <select
-            value={granularity}
-            onChange={(event) => setGranularity(event.target.value as Granularity)}
-          >
+          <select value={granularity} onChange={(event) => setGranularity(event.target.value as Granularity)}>
             <option value="hour">Heure</option>
             <option value="day">Jour</option>
             <option value="week">Semaine</option>
           </select>
         </label>
-        <label>
-          Top
-          <select value={limit} onChange={(event) => setLimit(Number(event.target.value))}>
-            <option value={5}>5</option>
-            <option value={10}>10</option>
-            <option value={20}>20</option>
-          </select>
-        </label>
-        {userId ? (
-          <button type="button" className="ghost" onClick={() => setUserId(null)}>
-            Filtre : {selectedName} · retirer
-          </button>
-        ) : null}
       </section>
 
-      {error ? <p className="banner">{error}</p> : null}
+      {invalid || error ? <p className="banner">{invalid ?? error}</p> : null}
 
-      <section className="stats">
-        <article>
-          <span>Traces</span>
-          <strong>{formatCount(totalTraces)}</strong>
-        </article>
-        <article>
-          <span>Projets</span>
-          <strong>{formatCount(projects.length)}</strong>
-        </article>
-        <article>
-          <span>Projets actifs</span>
-          <strong>{formatCount(activeProjects)}</strong>
-        </article>
-        <article>
-          <span>Utilisateurs actifs</span>
-          <strong>{formatCount(linkedUsers)}</strong>
-        </article>
-      </section>
+      <KpiStrip summary={summary} />
 
-      <UsageCharts
-        series={series}
-        topUsers={topUsers}
-        granularity={granularity}
-        onSelectUser={setUserId}
-      />
-      <ProjectsTable
-        projects={projects}
-        selectedUserId={userId}
-        onSelectUser={setUserId}
-      />
+      <div className="row trend-row">
+        <TrendChart
+          current={filled.current}
+          previous={filled.previous}
+          granularity={series.granularity}
+          subjectName={selectedName}
+          onClearSubject={() => setUserId(null)}
+        />
+        <StatusChart counts={summary.statusCounts} total={entities.length} />
+      </div>
+
+      <SignalsCard {...signals} />
+
+      <div className="row">
+        <TopEntitiesChart entities={entities} onSelectUser={setUserId} />
+        <TenantChart rows={tenants} />
+      </div>
+
+      <UsageTable entities={entities} selectedUserId={userId} onSelectUser={setUserId} />
     </main>
   );
 }

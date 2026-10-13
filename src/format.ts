@@ -36,7 +36,25 @@ export function rangeError(fromDate: string, toDate: string): string | null {
 }
 
 export function formatCount(value: number): string {
-  return new Intl.NumberFormat("fr-FR").format(value);
+  return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 }).format(value);
+}
+
+export function formatPercent(value: number): string {
+  return new Intl.NumberFormat("fr-FR", {
+    style: "percent",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+export function formatChange(current: number, previous: number): string {
+  if (previous === 0) return current > 0 ? "Nouveau" : "—";
+  const ratio = (current - previous) / previous;
+  return `${ratio > 0 ? "+" : ""}${formatPercent(ratio)}`;
+}
+
+export function changeTone(current: number, previous: number): "up" | "down" | "flat" {
+  if (current === previous) return "flat";
+  return current > previous ? "up" : "down";
 }
 
 export function formatDateTime(value: string | null): string {

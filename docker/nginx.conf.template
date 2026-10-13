@@ -1,0 +1,29 @@
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location = /config.js {
+        add_header Cache-Control "no-store";
+    }
+
+    location /auth-api/ {
+        proxy_pass ${AUTH_API_PROXY}/;
+        proxy_ssl_server_name on;
+        proxy_set_header Host $proxy_host;
+        proxy_set_header Authorization $http_authorization;
+        proxy_set_header Content-Type $http_content_type;
+    }
+
+    location /fusion-api/ {
+        proxy_pass ${FUSION_API_PROXY}/;
+        proxy_ssl_server_name on;
+        proxy_set_header Host $proxy_host;
+        proxy_set_header Authorization $http_authorization;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
