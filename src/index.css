@@ -48,22 +48,102 @@ p { margin: 0; }
 }
 
 .login {
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 420px);
-  gap: 3rem;
-  align-items: center;
   min-height: 100vh;
-  padding: 4rem clamp(1.5rem, 6vw, 7rem);
-}
-
-.login-copy { max-width: 36rem; }
-.login-copy p { margin-top: 1rem; color: #5c564e; font-size: 1.05rem; }
-
-.login-card {
   display: grid;
-  gap: 1rem;
+  place-items: center;
   padding: 1.5rem;
+  background: #e7e9ee;
 }
+
+.login-panel {
+  width: min(100%, 400px);
+  display: grid;
+  gap: 0.8rem;
+  padding: 1.6rem 1.5rem 1.4rem;
+  background: #fff;
+  border: 1px solid #d5d9e0;
+  border-radius: 8px;
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.35rem;
+}
+
+.login-mark {
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  background: #14171c;
+  color: #fff;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.login-brand strong {
+  display: block;
+  font-size: 0.95rem;
+  line-height: 1.15;
+}
+
+.login-brand span {
+  display: block;
+  color: #626b78;
+  font-size: 0.78rem;
+}
+
+.login h1 {
+  font-family: Manrope, sans-serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.login-lead {
+  margin-top: -0.35rem;
+  color: #626b78;
+  font-size: 0.92rem;
+}
+
+.login label { color: #14171c; }
+
+.login input {
+  border-color: #c8ced6;
+  border-radius: 6px;
+  padding: 0.65rem 0.75rem;
+}
+
+.login input:focus {
+  outline: 2px solid #14171c;
+  outline-offset: 1px;
+  border-color: #14171c;
+}
+
+.login button[type="submit"] {
+  margin-top: 0.2rem;
+  border-radius: 6px;
+  background: #14171c;
+}
+
+.login button[type="submit"]:hover:not(:disabled) { background: #2c3138; }
+
+.login-back {
+  justify-self: start;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #14171c;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.login .form-error { border-radius: 6px; }
 
 label {
   display: grid;
@@ -324,7 +404,6 @@ tr.selected { background: #e7f3ef; }
 }
 
 @media (max-width: 700px) {
-  .login,
   .kpis { grid-template-columns: 1fr; }
   .topbar { flex-direction: column; }
   .presets { margin-right: 0; }

@@ -51,20 +51,33 @@ export function LoginPage({ onSession }: LoginPageProps) {
     }
   }
 
+  function backToPassword() {
+    setChallengeToken(null);
+    setCode("");
+    setError(null);
+  }
+
   return (
     <main className="login">
-      <section className="login-copy">
-        <p className="eyebrow">Fusion · usage</p>
-        <h1>Traces par projet</h1>
-        <p>
-          Connexion via auth-api. Les graphes lisent les routes d’usage de
-          Fusion. Seul un super-admin voit les projets et leurs traces.
+      <form className="login-panel" onSubmit={onSubmit}>
+        <header className="login-brand">
+          <span className="login-mark" aria-hidden="true">
+            F
+          </span>
+          <div>
+            <strong>Fusion</strong>
+            <span>Usage</span>
+          </div>
+        </header>
+        <h1>{challengeToken ? "Vérification" : "Connexion"}</h1>
+        <p className="login-lead">
+          {challengeToken
+            ? "Entre le code à 6 chiffres de ce compte."
+            : "Accès réservé aux comptes super-admin."}
         </p>
-      </section>
-      <form className="card login-card" onSubmit={onSubmit}>
         {challengeToken ? (
           <label>
-            Code à 6 chiffres
+            Code
             <input
               inputMode="numeric"
               autoComplete="one-time-code"
@@ -73,6 +86,7 @@ export function LoginPage({ onSession }: LoginPageProps) {
               value={code}
               onChange={(event) => setCode(event.target.value)}
               required
+              autoFocus
             />
           </label>
         ) : (
@@ -84,6 +98,7 @@ export function LoginPage({ onSession }: LoginPageProps) {
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
                 required
+                autoFocus
               />
             </label>
             <label>
@@ -100,8 +115,13 @@ export function LoginPage({ onSession }: LoginPageProps) {
         )}
         {error ? <p className="form-error">{error}</p> : null}
         <button type="submit" disabled={pending}>
-          {pending ? "Connexion…" : challengeToken ? "Valider le code" : "Se connecter"}
+          {pending ? "Connexion…" : challengeToken ? "Valider" : "Se connecter"}
         </button>
+        {challengeToken ? (
+          <button type="button" className="login-back" onClick={backToPassword}>
+            Utiliser un autre compte
+          </button>
+        ) : null}
       </form>
     </main>
   );
