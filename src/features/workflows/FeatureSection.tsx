@@ -1,14 +1,17 @@
 import { useMemo } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AgentDurationChart, FeatureCostChart, WorkflowVolumeChart } from "./FeatureBreakdownCharts";
 import { FeatureAdoptionChart, FeatureTrendChart } from "./FeatureCharts";
 import { FeatureKpis } from "./FeatureKpis";
 import {
+  agentDurationTotals,
   buildFeatureEntities,
   featureUsage,
   summarizeAgentFlows,
   summarizeCosts,
   summarizeFeatures,
   withOwners,
+  workflowTotals,
   type FeatureEntity,
 } from "./featureMetrics";
 import { FeatureTables } from "./FeatureTables";
@@ -36,6 +39,8 @@ export function FeatureSection(props: FeatureSectionProps) {
   const costs = summarizeCosts(data.workflows, data.agents);
   const workflows = useMemo(() => withOwners(data.workflows, authNames), [data.workflows, authNames]);
   const agents = useMemo(() => withOwners(data.agents, authNames), [data.agents, authNames]);
+  const workflowBars = useMemo(() => workflowTotals(workflows), [workflows]);
+  const agentDurations = useMemo(() => agentDurationTotals(data.agents), [data.agents]);
   const filled = useMemo(() => {
     if (!periods) return { workflow: [], agent: [] };
     return {
@@ -71,6 +76,11 @@ export function FeatureSection(props: FeatureSectionProps) {
         subjectName={props.subjectName}
       />
       <FeatureAdoptionChart entities={entities} onSelectUser={props.onSelectUser} />
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <FeatureCostChart costs={costs} />
+        <WorkflowVolumeChart rows={workflowBars} />
+      </div>
+      <AgentDurationChart rows={agentDurations} />
 
       <FeatureTables
         workflows={workflows}

@@ -2,7 +2,8 @@ import { useMemo } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Kpi } from "@/shared/components/Kpi";
 import { formatCompact, formatCost, formatCount, formatDuration, formatPercent } from "@/shared/format";
-import { modelTotals, summarizeInsights } from "./insightMetrics";
+import { EvaluationChart, PromptChart, ScoreChart, TokenChart, UserModelChart } from "./InsightCharts";
+import { evaluationOutcomes, modelTotals, promptTotals, scoreTotals, summarizeInsights, userCallTotals } from "./insightMetrics";
 import { InsightTables } from "./InsightTables";
 import { ModelChart } from "./ModelChart";
 import type { InsightData } from "./useInsights";
@@ -21,6 +22,10 @@ export function InsightSection(props: InsightSectionProps) {
   const { data } = props;
   const summary = summarizeInsights(data);
   const models = useMemo(() => modelTotals(data.models), [data.models]);
+  const users = useMemo(() => userCallTotals(data.models, props.authNames), [data.models, props.authNames]);
+  const prompts = useMemo(() => promptTotals(data.prompts), [data.prompts]);
+  const scores = useMemo(() => scoreTotals(data.scores), [data.scores]);
+  const outcomes = useMemo(() => evaluationOutcomes(data.evaluations), [data.evaluations]);
   const errorRate = summary.modelCalls > 0 ? summary.modelErrors / summary.modelCalls : 0;
   const evalErrorRate = summary.evaluationRuns > 0 ? summary.evaluationErrors / summary.evaluationRuns : 0;
 
@@ -67,7 +72,18 @@ export function InsightSection(props: InsightSectionProps) {
         />
       </div>
 
-      <ModelChart rows={models} />
+      <div className="grid items-start gap-4 xl:grid-cols-2">
+        <ModelChart rows={models} />
+        <TokenChart rows={models} />
+      </div>
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <UserModelChart rows={users} onSelectUser={props.onSelectUser} />
+        <PromptChart rows={prompts} />
+      </div>
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <ScoreChart rows={scores} />
+        <EvaluationChart outcomes={outcomes} />
+      </div>
 
       <InsightTables
         data={data}

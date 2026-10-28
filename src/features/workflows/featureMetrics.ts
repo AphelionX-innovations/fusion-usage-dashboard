@@ -168,6 +168,77 @@ function addTotals(rows: ObservationTotals[]) {
   );
 }
 
+export type WorkflowTotal = {
+  name: string;
+  traceCount: number;
+  totalCost: number;
+  errorCount: number;
+  users: number;
+  nodeCount: number | null;
+};
+
+export function workflowTotals(rows: Owned<WorkflowUsage>[], limit = 8): WorkflowTotal[] {
+  const byGraph = new Map<string, WorkflowTotal & { owners: Set<string> }>();
+  for (const row of rows) {
+    const name = row.workflowName || "Workflow sans nom";
+    const total = byGraph.get(row.graphId) ?? {
+      name,
+      traceCount: 0,
+      totalCost: 0,
+      errorCount: 0,
+      users: 0,
+      nodeCount: null,
+      owners: new Set<string>(),
+    };
+    total.traceCount += row.traceCount;
+    total.totalCost += row.totalCost ?? 0;
+    total.errorCount += row.errorCount ?? 0;
+    total.owners.add(row.ownerKey);
+    const nodes = workflowNodeCount(row);
+    if (nodes !== null && (total.nodeCount === null || nodes > total.nodeCount)) total.nodeCount = nodes;
+    byGraph.set(row.graphId, total);
+  }
+  return [...byGraph.values()]
+    .map(({ owners, ...row }) => ({ ...row, users: owners.size }))
+    .filter((row) => row.traceCount > 0)
+    .sort((left, right) => right.traceCount - left.traceCount)
+    .slice(0, limit);
+}
+
+export type AgentDurationTotal = {
+  name: string;
+  runs: number;
+  avgDurationMs: number | null;
+  p95DurationMs: number | null;
+};
+
+export function agentDurationTotals(rows: AgentFlowUsage[], limit = 8): AgentDurationTotal[] {
+  const byFlow = new Map<string, AgentDurationTotal & { timedRuns: number; weighted: number }>();
+  for (const row of rows) {
+    const name = row.flowName || "Flow sans nom";
+    const total = byFlow.get(row.flowId) ?? { name, runs: 0, avgDurationMs: null, p95DurationMs: null, timedRuns: 0, weighted: 0 };
+    total.runs += row.runCount;
+    if (row.avgDurationMs !== null) {
+      total.timedRuns += row.runCount;
+      total.weighted += row.avgDurationMs * row.runCount;
+    }
+    if (row.p95DurationMs !== null && (total.p95DurationMs === null || row.p95DurationMs > total.p95DurationMs)) {
+      total.p95DurationMs = row.p95DurationMs;
+    }
+    byFlow.set(row.flowId, total);
+  }
+  return [...byFlow.values()]
+    .map((row) => ({
+      name: row.name,
+      runs: row.runs,
+      avgDurationMs: row.timedRuns > 0 ? row.weighted / row.timedRuns : null,
+      p95DurationMs: row.p95DurationMs,
+    }))
+    .filter((row) => row.runs > 0 && (row.avgDurationMs !== null || row.p95DurationMs !== null))
+    .sort((left, right) => right.runs - left.runs)
+    .slice(0, limit);
+}
+
 export function summarizeCosts(workflows: WorkflowUsage[], agents: AgentFlowUsage[]): CostSummary {
   const workflow = addTotals(workflows);
   const agent = addTotals(agents);

@@ -3,18 +3,23 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ActivitySection, useActivity } from "@/features/activity";
 import { InsightSection, useInsights } from "@/features/insights";
 import {
   buildEntities,
   KpiStrip,
+  PlatformCharts,
   SignalsCard,
+  SourceChart,
   StatusChart,
   summarize,
   tenantBreakdown,
   TenantChart,
+  TenantCompareChart,
   TopEntitiesChart,
   TrendChart,
+  UsageMixChart,
   UsageTable,
   usageSignals,
   useProjectUsage,
@@ -54,7 +59,7 @@ export function DashboardPage({ session, onLogout }: DashboardPageProps) {
   const loadParams = { token, periods, granularity, userId, refreshKey, onUnauthorized: onLogout };
   const usage = useProjectUsage(loadParams);
   const features = useFeatureUsage(loadParams);
-  const insights = useInsights({ ...loadParams, enabled: tab === "insights" });
+  const insights = useInsights({ ...loadParams, enabled: tab === "insights" || tab === "overview" });
   const activity = useActivity({ ...loadParams, filter: activityFilter, enabled: tab === "activity" });
   const environments = useEnvironments({ token, periods, refreshKey });
   const { projects, series } = usage;
@@ -200,23 +205,61 @@ export function DashboardPage({ session, onLogout }: DashboardPageProps) {
           ) : (
             <div role="tabpanel">
               {tab === "overview" ? (
-                <div className="grid gap-4">
+                <div className="@container/main flex flex-col gap-4 md:gap-6">
                   <KpiStrip summary={summary} />
-                  <div className="grid items-start gap-3 xl:grid-cols-[1.7fr_1fr]">
-                    <TrendChart
-                      current={filled.current}
-                      previous={filled.previous}
-                      granularity={series.granularity}
-                      subjectName={selectedName}
-                      onClearSubject={clearUser}
-                    />
-                    <StatusChart counts={summary.statusCounts} total={entities.length} />
-                  </div>
+                  <TrendChart
+                    current={filled.current}
+                    previous={filled.previous}
+                    granularity={series.granularity}
+                    subjectName={selectedName}
+                    onClearSubject={clearUser}
+                  />
+                  <Tabs defaultValue="usage">
+                    <TabsList variant="line">
+                      <TabsTrigger value="usage">Usage</TabsTrigger>
+                      <TabsTrigger value="workflows">Workflows et agents</TabsTrigger>
+                      <TabsTrigger value="models">Modèles et scores</TabsTrigger>
+                      <TabsTrigger value="accounts">Comptes</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="usage" className="grid gap-4 pt-4 lg:grid-cols-2">
+                      <StatusChart counts={summary.statusCounts} total={entities.length} />
+                      <UsageMixChart
+                        entities={featureEntities}
+                        state={features.loadedAt ? "ready" : features.error ? "error" : "loading"}
+                      />
+                      <SourceChart entities={entities} />
+                      <TenantCompareChart rows={tenants} />
+                    </TabsContent>
+                    <TabsContent value="workflows" className="pt-4">
+                      <PlatformCharts
+                        section="workflows"
+                        features={features.data}
+                        featuresState={features.loadedAt ? "ready" : features.error ? "error" : "loading"}
+                        insights={insights.data}
+                        insightsState={insights.loadedAt ? "ready" : "loading"}
+                        insightErrors={insights.errors}
+                        authNames={projects.authNames}
+                        onSelectUser={selectUser}
+                      />
+                    </TabsContent>
+                    <TabsContent value="models" className="pt-4">
+                      <PlatformCharts
+                        section="models"
+                        features={features.data}
+                        featuresState={features.loadedAt ? "ready" : features.error ? "error" : "loading"}
+                        insights={insights.data}
+                        insightsState={insights.loadedAt ? "ready" : "loading"}
+                        insightErrors={insights.errors}
+                        authNames={projects.authNames}
+                        onSelectUser={selectUser}
+                      />
+                    </TabsContent>
+                    <TabsContent value="accounts" className="grid gap-4 pt-4 lg:grid-cols-2">
+                      <TopEntitiesChart entities={entities} onSelectUser={selectUser} />
+                      <TenantChart rows={tenants} />
+                    </TabsContent>
+                  </Tabs>
                   <SignalsCard {...signals} />
-                  <div className="grid items-start gap-3 lg:grid-cols-2">
-                    <TopEntitiesChart entities={entities} onSelectUser={selectUser} />
-                    <TenantChart rows={tenants} />
-                  </div>
                 </div>
               ) : null}
 

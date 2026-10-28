@@ -1,4 +1,6 @@
 export { StatusChart, TenantChart, TopEntitiesChart } from "./BreakdownCharts";
+export { SourceChart, TenantCompareChart, UsageMixChart } from "./OverviewCharts";
+export { PlatformCharts } from "./PlatformCharts";
 export { KpiStrip } from "./KpiStrip";
 export { SignalsCard } from "./SignalsCard";
 export { TrendChart } from "./TrendChart";

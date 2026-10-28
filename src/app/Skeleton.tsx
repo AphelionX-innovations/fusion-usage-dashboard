@@ -19,11 +19,25 @@ export function TabSkeleton({ tab }: { tab: DashboardTab }) {
       ) : (
         <>
           <KpiSkeleton />
-          <div className={tab === "overview" ? "grid gap-3 xl:grid-cols-[1.7fr_1fr]" : "grid gap-4"}>
-            <Skeleton className="h-80" />
-            {tab === "overview" ? <Skeleton className="h-80" /> : <Skeleton className="h-72" />}
-          </div>
-          <Skeleton className={tab === "overview" ? "h-56" : "h-[420px]"} />
+          {tab === "overview" ? (
+            <>
+              <Skeleton className="h-80" />
+              <Skeleton className="h-8 w-96" />
+              <div className="grid gap-3 lg:grid-cols-2">
+                <Skeleton className="h-80" />
+                <Skeleton className="h-80" />
+              </div>
+              <Skeleton className="h-56" />
+            </>
+          ) : (
+            <>
+              <div className="grid gap-4">
+                <Skeleton className="h-80" />
+                <Skeleton className="h-72" />
+              </div>
+              <Skeleton className="h-[420px]" />
+            </>
+          )}
         </>
       )}
     </div>
