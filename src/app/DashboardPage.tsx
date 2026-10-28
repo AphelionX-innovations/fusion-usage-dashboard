@@ -1,26 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
-import { LayoutDashboardIcon, LogOutIcon, MoonIcon, SunIcon, UsersIcon, WorkflowIcon } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarInset,
-  SidebarMenu,
-  SidebarMenuBadge,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarProvider,
-  SidebarRail,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { ActivitySection, useActivity } from "@/features/activity";
+import { InsightSection, useInsights } from "@/features/insights";
 import {
   buildEntities,
   KpiStrip,
@@ -38,65 +22,41 @@ import {
 import { UserDrawer, type UserOption } from "@/features/users";
 import { buildFeatureEntities, FeatureSection, featureUsage, useFeatureUsage } from "@/features/workflows";
 import { logout } from "@/shared/api";
-import { formatCount, personName, rangeError } from "@/shared/format";
+import { personName, rangeError } from "@/shared/format";
+import type { ActivityQuery } from "@/shared/insightTypes";
 import { buildPeriods, fillSeries } from "@/shared/periods";
 import type { Session } from "@/shared/types";
+import { AppSidebar } from "./AppSidebar";
 import { DashboardFilters } from "./DashboardFilters";
+import { PAGE_COPY } from "./navigation";
 import { TabSkeleton } from "./Skeleton";
-import { useTheme } from "./theme";
 import { useDashboardParams, type DashboardTab } from "./useDashboardParams";
-
-const NAV: { value: DashboardTab; label: string; icon: typeof LayoutDashboardIcon }[] = [
-  { value: "overview", label: "Vue d’ensemble", icon: LayoutDashboardIcon },
-  { value: "features", label: "Workflows et agents", icon: WorkflowIcon },
-  { value: "users", label: "Utilisateurs", icon: UsersIcon },
-];
-
-const PAGE_COPY: Record<DashboardTab, { eyebrow: string; title: string }> = {
-  overview: {
-    eyebrow: "Super-admin · usage des traces",
-    title: "Qui utilise la plateforme, et comment ça évolue",
-  },
-  features: {
-    eyebrow: "Workflows et agents",
-    title: "Comment la plateforme est utilisée",
-  },
-  users: {
-    eyebrow: "Comptes et projets",
-    title: "Utilisateurs et projets",
-  },
-};
+import { useEnvironments } from "./useEnvironments";
 
 type DashboardPageProps = {
   session: Session;
   onLogout: () => void;
 };
 
-function initials(name: string) {
-  const letters = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "");
-  return letters.join("") || "F";
-}
-
 export function DashboardPage({ session, onLogout }: DashboardPageProps) {
   const token = session.accessToken;
   const [params, update] = useDashboardParams();
   const [refreshKey, setRefreshKey] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const { theme, toggle } = useTheme();
-  const { userId, granularity, tab } = params;
+  const [activityFilter, setActivityFilter] = useState<ActivityQuery>({ limit: 50 });
+  const { userId, granularity, tab, environment } = params;
 
   const invalid = rangeError(params.from, params.to);
   const periods = useMemo(
-    () => (invalid ? null : buildPeriods(params.from, params.to)),
-    [params.from, params.to, invalid],
+    () => (invalid ? null : buildPeriods(params.from, params.to, environment)),
+    [params.from, params.to, environment, invalid],
   );
   const loadParams = { token, periods, granularity, userId, refreshKey, onUnauthorized: onLogout };
   const usage = useProjectUsage(loadParams);
   const features = useFeatureUsage(loadParams);
+  const insights = useInsights({ ...loadParams, enabled: tab === "insights" });
+  const activity = useActivity({ ...loadParams, filter: activityFilter, enabled: tab === "activity" });
+  const environments = useEnvironments({ token, periods, refreshKey });
   const { projects, series } = usage;
 
   const entities = useMemo(
@@ -144,12 +104,21 @@ export function DashboardPage({ session, onLogout }: DashboardPageProps) {
     };
   }, [userId, projects, features.data]);
 
-  const busy = usage.loading || features.loading;
-  const firstLoad = tab === "features" ? !features.loadedAt && features.loading : !usage.loadedAt && usage.loading;
+  const busy = usage.loading || features.loading || insights.loading || activity.loading;
+  const tabLoad: Record<DashboardTab, { loading: boolean; loadedAt: Date | null }> = {
+    overview: usage,
+    features,
+    insights,
+    activity,
+    users: usage,
+  };
+  const firstLoad = !tabLoad[tab].loadedAt && tabLoad[tab].loading;
   const period = { from: params.from, to: params.to };
   const tabCounts: Record<DashboardTab, number | null> = {
     overview: null,
     features: features.loadedAt ? featureEntities.filter((entity) => featureUsage(entity) > 0).length : null,
+    insights: null,
+    activity: activity.loadedAt ? activity.result.total : null,
     users: usage.loadedAt ? entities.length : null,
   };
   const copy = PAGE_COPY[tab];
@@ -175,75 +144,13 @@ export function DashboardPage({ session, onLogout }: DashboardPageProps) {
 
   return (
     <SidebarProvider>
-      <Sidebar collapsible="icon">
-        <SidebarHeader>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton size="lg" tooltip="Fusion Usage">
-                <span className="grid size-8 place-items-center rounded-md bg-sidebar-primary text-sm font-bold text-sidebar-primary-foreground">
-                  F
-                </span>
-                <span className="grid text-left leading-tight">
-                  <span className="truncate font-semibold">Fusion</span>
-                  <span className="truncate text-xs tracking-wide text-muted-foreground uppercase">Usage des traces</span>
-                </span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarHeader>
-        <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupLabel>Console télémétrie</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {NAV.map((option) => (
-                  <SidebarMenuItem key={option.value}>
-                    <SidebarMenuButton
-                      isActive={tab === option.value}
-                      tooltip={option.label}
-                      onClick={() => update({ tab: option.value })}
-                    >
-                      <option.icon />
-                      <span>{option.label}</span>
-                    </SidebarMenuButton>
-                    {tabCounts[option.value] !== null ? (
-                      <SidebarMenuBadge>{formatCount(tabCounts[option.value] ?? 0)}</SidebarMenuBadge>
-                    ) : null}
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        </SidebarContent>
-        <SidebarFooter>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton size="lg" className="pointer-events-none" tooltip={sessionName}>
-                <Avatar className="size-8">
-                  <AvatarFallback>{initials(sessionName)}</AvatarFallback>
-                </Avatar>
-                <span className="truncate">{sessionName}</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                tooltip={theme === "dark" ? "Mode clair" : "Mode sombre"}
-                onClick={toggle}
-              >
-                {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-                <span>{theme === "dark" ? "Mode clair" : "Mode sombre"}</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton tooltip="Se déconnecter" onClick={() => void signOut()}>
-                <LogOutIcon />
-                <span>Se déconnecter</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarFooter>
-        <SidebarRail />
-      </Sidebar>
+      <AppSidebar
+        tab={tab}
+        tabCounts={tabCounts}
+        onTab={(next) => update({ tab: next })}
+        sessionName={sessionName}
+        onSignOut={() => void signOut()}
+      />
       <SidebarInset>
         <header className="sticky top-0 z-20 flex flex-col gap-4 border-b bg-background/90 px-4 py-3 backdrop-blur">
           <div className="flex items-start gap-2">
@@ -257,6 +164,7 @@ export function DashboardPage({ session, onLogout }: DashboardPageProps) {
           <DashboardFilters
             params={params}
             onChange={update}
+            environments={environments}
             userOptions={userOptions}
             onSelectUser={selectUser}
             onClearUser={clearUser}
@@ -321,6 +229,31 @@ export function DashboardPage({ session, onLogout }: DashboardPageProps) {
                   periods={periods}
                   error={features.error}
                   subjectName={selectedName}
+                  selectedUserId={userId}
+                  onSelectUser={selectUser}
+                  period={period}
+                />
+              ) : null}
+
+              {tab === "insights" ? (
+                <InsightSection
+                  data={insights.data}
+                  errors={insights.errors}
+                  authNames={projects.authNames}
+                  environment={environment}
+                  selectedUserId={userId}
+                  onSelectUser={selectUser}
+                  period={period}
+                />
+              ) : null}
+
+              {tab === "activity" ? (
+                <ActivitySection
+                  result={activity.result}
+                  error={activity.error}
+                  filter={activityFilter}
+                  onFilter={setActivityFilter}
+                  authNames={projects.authNames}
                   selectedUserId={userId}
                   onSelectUser={selectUser}
                   period={period}

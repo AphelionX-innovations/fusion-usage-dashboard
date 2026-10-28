@@ -4,15 +4,26 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UserPicker, type UserOption } from "@/features/users";
-import { defaultToDate, formatTime, presetFromDate } from "@/shared/format";
+import { defaultToDate, formatCompact, formatTime, presetFromDate } from "@/shared/format";
+import type { EnvironmentUsage } from "@/shared/insightTypes";
 import type { Granularity } from "@/shared/types";
 import type { DashboardParams } from "./useDashboardParams";
 
 const PRESETS = [7, 30, 90];
+const ALL_ENVIRONMENTS = "all";
+
+function environmentOptions(environments: EnvironmentUsage[], selected: string | null): EnvironmentUsage[] {
+  const sorted = [...environments].sort(
+    (left, right) => Number(left.internal) - Number(right.internal) || right.traceCount - left.traceCount,
+  );
+  if (!selected || sorted.some((environment) => environment.environment === selected)) return sorted;
+  return [{ environment: selected, internal: false, traceCount: 0, projectCount: 0, lastTraceAt: "" }, ...sorted];
+}
 
 type DashboardFiltersProps = {
   params: DashboardParams;
   onChange: (patch: Partial<DashboardParams>) => void;
+  environments: EnvironmentUsage[];
   userOptions: UserOption[];
   onSelectUser: (userId: string) => void;
   onClearUser: () => void;
@@ -80,6 +91,28 @@ export function DashboardFilters(props: DashboardFiltersProps) {
             <SelectItem value="hour">Heure</SelectItem>
             <SelectItem value="day">Jour</SelectItem>
             <SelectItem value="week">Semaine</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="grid gap-1.5">
+        <Label htmlFor="environment">Environnement</Label>
+        <Select
+          value={params.environment ?? ALL_ENVIRONMENTS}
+          onValueChange={(value) => onChange({ environment: value === ALL_ENVIRONMENTS ? null : value })}
+        >
+          <SelectTrigger id="environment" className="w-52">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_ENVIRONMENTS}>Tous les environnements</SelectItem>
+            {environmentOptions(props.environments, params.environment).map((environment) => (
+              <SelectItem key={environment.environment} value={environment.environment}>
+                {environment.environment}
+                <span className="text-muted-foreground">
+                  {environment.internal ? " · interne" : ""} · {formatCompact(environment.traceCount)}
+                </span>
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>

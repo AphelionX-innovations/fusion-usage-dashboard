@@ -43,6 +43,7 @@ export type Granularity = "hour" | "day" | "week";
 export type UsageRange = {
   from: string;
   to: string;
+  environment?: string;
 };
 
 export type UsageFeature = "workflow" | "agent";

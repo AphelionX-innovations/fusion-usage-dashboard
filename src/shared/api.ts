@@ -123,15 +123,15 @@ export async function logout(session: Session): Promise<void> {
   }
 }
 
-function usageQuery(range: UsageRange, extra?: Record<string, string | undefined>) {
+export function usageQuery(range: UsageRange, extra?: Record<string, string | undefined>) {
   const params = new URLSearchParams({ from: range.from, to: range.to });
-  for (const [key, value] of Object.entries(extra ?? {})) {
+  for (const [key, value] of Object.entries({ environment: range.environment, ...extra })) {
     if (value) params.set(key, value);
   }
   return params.toString();
 }
 
-async function getUsage<T>(token: string, path: string, query: string): Promise<T> {
+export async function getUsage<T>(token: string, path: string, query: string): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${fusionBase}${path}?${query}`, {

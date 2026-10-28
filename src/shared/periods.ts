@@ -19,18 +19,19 @@ export type Periods = {
   days: number;
 };
 
-export function buildPeriods(fromDate: string, toDate: string): Periods {
+export function buildPeriods(fromDate: string, toDate: string, environment?: string | null): Periods {
   const { from, to } = toRangeBounds(fromDate, toDate);
   const span = to.getTime() - from.getTime() + 1;
   const previousFrom = new Date(from.getTime() - span);
   const previousTo = new Date(from.getTime() - 1);
+  const scope = environment ? { environment } : {};
   return {
     from,
     to,
     previousFrom,
     previousTo,
-    current: { from: from.toISOString(), to: to.toISOString() },
-    previous: { from: previousFrom.toISOString(), to: previousTo.toISOString() },
+    current: { from: from.toISOString(), to: to.toISOString(), ...scope },
+    previous: { from: previousFrom.toISOString(), to: previousTo.toISOString(), ...scope },
     days: Math.max(1, Math.round(span / DAY_MS)),
   };
 }
