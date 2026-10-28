@@ -7,8 +7,16 @@ export function isoDate(date: Date): string {
   return `${date.getFullYear()}-${month}-${day}`;
 }
 
+export function presetFromDate(days: number): string {
+  return isoDate(new Date(Date.now() - (days - 1) * DAY_MS));
+}
+
 export function defaultFromDate(): string {
-  return isoDate(new Date(Date.now() - 30 * DAY_MS));
+  return presetFromDate(30);
+}
+
+export function formatTime(value: Date): string {
+  return new Intl.DateTimeFormat("fr-FR", { timeStyle: "short" }).format(value);
 }
 
 export function defaultToDate(): string {
@@ -37,6 +45,29 @@ export function rangeError(fromDate: string, toDate: string): string | null {
 
 export function formatCount(value: number): string {
   return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 }).format(value);
+}
+
+export function formatCompact(value: number): string {
+  return new Intl.NumberFormat("fr-FR", { notation: "compact", maximumFractionDigits: 1 }).format(value);
+}
+
+export function formatCost(value: number | null | undefined): string {
+  if (value === null || value === undefined) return "—";
+  if (value > 0 && value < 0.01) return "< 0,01 $";
+  return new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+export function formatDuration(ms: number | null | undefined): string {
+  if (ms === null || ms === undefined || !Number.isFinite(ms)) return "—";
+  if (ms < 1000) return `${Math.round(ms)} ms`;
+  if (ms < 60_000) return `${formatCount(Math.round(ms / 100) / 10)} s`;
+  const minutes = Math.floor(ms / 60_000);
+  const seconds = Math.round((ms % 60_000) / 1000);
+  return `${minutes} min ${String(seconds).padStart(2, "0")} s`;
 }
 
 export function formatPercent(value: number): string {

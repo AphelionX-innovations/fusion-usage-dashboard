@@ -1,4 +1,5 @@
-import type { UsageProject } from "./types";
+import { identify, UNNAMED_KEY } from "@/shared/identity";
+import type { UsageProject } from "@/shared/types";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const RECENT_MS = 7 * DAY_MS;
@@ -8,10 +9,10 @@ const TOP_SIZE = 5;
 export type EntityStatus = "active" | "slowing" | "stopped" | "dormant";
 
 export const STATUS_META: Record<EntityStatus, { label: string; hint: string; color: string }> = {
-  active: { label: "Actif", hint: "trace dans les 7 derniers jours", color: "#0c6b58" },
-  slowing: { label: "Ralenti", hint: "aucune trace depuis plus de 7 jours", color: "#d29b2c" },
-  stopped: { label: "Arrêté", hint: "actif avant, plus rien sur la période", color: "#b84a2a" },
-  dormant: { label: "Dormant", hint: "aucune trace sur les deux périodes", color: "#b8afa3" },
+  active: { label: "Actif", hint: "trace dans les 7 derniers jours", color: "var(--s-active)" },
+  slowing: { label: "Ralenti", hint: "aucune trace depuis plus de 7 jours", color: "var(--s-slowing)" },
+  stopped: { label: "Arrêté", hint: "actif avant, plus rien sur la période", color: "var(--s-stopped)" },
+  dormant: { label: "Dormant", hint: "aucune trace sur les deux périodes", color: "var(--s-dormant)" },
 };
 
 export type UsageEntity = {
@@ -29,28 +30,6 @@ export type UsageEntity = {
 };
 
 type Draft = Omit<UsageEntity, "status" | "share">;
-
-const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
-const UNNAMED_KEY = "local:unnamed";
-
-function readableName(value: string | null | undefined): string | null {
-  const trimmed = value?.trim();
-  if (!trimmed || UUID_PATTERN.test(trimmed)) return null;
-  return trimmed;
-}
-
-function identify(project: UsageProject, authNames: Record<string, string>) {
-  if (project.userId) {
-    return {
-      key: `auth:${project.userId}`,
-      name: readableName(authNames[project.userId]) || readableName(project.userName) || "Utilisateur sans nom",
-      tenantName: readableName(project.tenantName),
-    };
-  }
-  const name = readableName(project.userName);
-  if (!name) return { key: UNNAMED_KEY, name: "Projets sans nom", tenantName: null };
-  return { key: `local:${project.projectId}`, name, tenantName: readableName(project.tenantName) };
-}
 
 function addProjects(params: {
   drafts: Map<string, Draft>;

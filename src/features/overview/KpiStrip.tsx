@@ -1,4 +1,5 @@
-import { changeTone, formatChange, formatCount, formatPercent } from "./format";
+import { changeTone, formatChange, formatCount, formatPercent } from "@/shared/format";
+import { Kpi } from "@/shared/components/Kpi";
 import type { UsageSummary } from "./metrics";
 
 const CONCENTRATION_ALERT = 0.8;
@@ -8,7 +9,7 @@ export function KpiStrip({ summary }: { summary: UsageSummary }) {
   const concentrated = summary.topShare !== null && summary.topShare >= CONCENTRATION_ALERT;
 
   return (
-    <section className="kpis">
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Kpi
         label="Traces sur la période"
         value={formatCount(summary.total)}
@@ -39,24 +40,5 @@ export function KpiStrip({ summary }: { summary: UsageSummary }) {
         detail="Baisse de plus de 50 % ou arrêt par rapport à la période précédente"
       />
     </section>
-  );
-}
-
-function Kpi(props: {
-  label: string;
-  value: string;
-  detail: string;
-  badge?: string;
-  tone?: "good" | "warn";
-}) {
-  return (
-    <article className={`kpi${props.tone ? ` ${props.tone}` : ""}`}>
-      <span>{props.label}</span>
-      <div>
-        <strong>{props.value}</strong>
-        {props.badge ? <em>{props.badge}</em> : null}
-      </div>
-      <p>{props.detail}</p>
-    </article>
   );
 }
