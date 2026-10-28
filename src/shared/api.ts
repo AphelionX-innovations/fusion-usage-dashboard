@@ -1,12 +1,16 @@
 import { clearSession } from "./session";
 import type {
+  AgentFlowUsage,
   AuthUser,
+  FeatureAdoption,
   Granularity,
   Session,
   TimeseriesSubject,
   TraceBucket,
+  UsageFeature,
   UsageProject,
   UsageRange,
+  WorkflowUsage,
 } from "./types";
 
 function apiBase(runtimeValue: string | undefined, buildValue: string | undefined, fallback: string) {
@@ -160,15 +164,43 @@ export async function fetchTimeseries(
   range: UsageRange,
   granularity: Granularity,
   userId?: string,
+  feature?: UsageFeature,
 ): Promise<{ subject: TimeseriesSubject | null; data: TraceBucket[] }> {
   const body = await getUsage<TimeseriesSubject & { data: TraceBucket[] }>(
     token,
     "/api/auth/usage/timeseries",
-    usageQuery(range, { granularity, userId }),
+    usageQuery(range, { granularity, userId, feature }),
   );
   const { data, ...subject } = body;
   const hasSubject = userId !== undefined && subject.userId !== undefined;
   return { subject: hasSubject ? subject : null, data };
+}
+
+export async function fetchAdoption(token: string, range: UsageRange): Promise<FeatureAdoption[]> {
+  const body = await getUsage<{ data: FeatureAdoption[] }>(
+    token,
+    "/api/auth/usage/adoption",
+    usageQuery(range),
+  );
+  return body.data;
+}
+
+export async function fetchWorkflows(token: string, range: UsageRange): Promise<WorkflowUsage[]> {
+  const body = await getUsage<{ data: WorkflowUsage[] }>(
+    token,
+    "/api/auth/usage/workflows",
+    usageQuery(range, { include: "observations" }),
+  );
+  return body.data;
+}
+
+export async function fetchAgentFlows(token: string, range: UsageRange): Promise<AgentFlowUsage[]> {
+  const body = await getUsage<{ data: AgentFlowUsage[] }>(
+    token,
+    "/api/auth/usage/agent-flows",
+    usageQuery(range, { include: "observations" }),
+  );
+  return body.data;
 }
 
 type AuthNameRow = {

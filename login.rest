@@ -1,0 +1,22 @@
+@username = admin@abafusion.ai
+@password = 0XsdfrsydV5w9Pv2Afy@
+
+### Login direct — staging auth
+POST https://stg-login.abafusion.ai/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "password": "{{password}}",
+  "tokenType": "bearer"
+}
+
+### Login via le front hébergé
+POST https://perf-analytics.aphelionxcore.com/auth-api/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "password": "{{password}}",
+  "tokenType": "bearer"
+}
