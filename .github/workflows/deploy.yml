@@ -1,0 +1,36 @@
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script_stop: true
+          script: |
+            set -eu
+            cd "${{ secrets.DEPLOY_PATH }}"
+            git fetch origin master
+            git checkout master
+            git pull --ff-only origin master
+            if [ ! -f .env.docker ]; then
+              echo "Crée .env.docker à partir de .env.docker.example sur le serveur avant le premier déploiement." >&2
+              exit 1
+            fi
+            docker compose --env-file .env.docker up -d --build --remove-orphans
+            docker image prune -f
+            docker compose --env-file .env.docker port web 80
