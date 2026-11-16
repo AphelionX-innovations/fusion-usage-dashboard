@@ -18,6 +18,14 @@ export function saveSession(session: Session) {
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session));
 }
 
+export function updateAccessToken(accessToken: string): Session | null {
+  const current = loadSession();
+  if (!current) return null;
+  const next = { ...current, accessToken };
+  saveSession(next);
+  return next;
+}
+
 export function clearSession() {
   sessionStorage.removeItem(STORAGE_KEY);
 }

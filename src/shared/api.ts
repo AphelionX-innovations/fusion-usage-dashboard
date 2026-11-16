@@ -1,4 +1,4 @@
-import { clearSession } from "./session";
+import { clearSession, loadSession, updateAccessToken } from "./session";
 import type {
   AgentFlowUsage,
   AuthUser,
@@ -105,7 +105,9 @@ export function verifyTwoFactor(
   });
 }
 
-export async function logout(session: Session): Promise<void> {
+export async function logout(initial: Session): Promise<void> {
+  // Les tokens de la session peuvent avoir été renouvelés depuis le login.
+  const session = loadSession() ?? initial;
   try {
     await fetch(`${authBase}/api/v1/auth/logout`, {
       method: "POST",
@@ -123,6 +125,71 @@ export async function logout(session: Session): Promise<void> {
   }
 }
 
+let refreshInFlight: Promise<string> | null = null;
+
+/**
+ * Échange le refresh token contre un nouvel access token (POST /auth/refresh-token).
+ * Un seul appel à la fois : les requêtes simultanées partagent la même promesse,
+ * car auth-api révoque les tokens dès qu'un refresh est rejeté.
+ */
+export function refreshAccessToken(): Promise<string> {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    const session = loadSession();
+    if (!session?.refreshToken) throw new ApiError("Session expirée.", 401);
+    let response: Response;
+    try {
+      response = await fetch(`${authBase}/api/v1/auth/refresh-token`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.refreshToken}` },
+      });
+    } catch {
+      throw new ApiError("Auth API est injoignable.", 0);
+    }
+    if (!response.ok) {
+      const error = await readError(response);
+      // Refresh refusé (expiré, révoqué, compte désactivé) : la session est terminée.
+      if (response.status === 401 || response.status === 403) clearSession();
+      throw error;
+    }
+    const body = (await response.json().catch(() => null)) as { accessToken?: string } | null;
+    if (!body?.accessToken) throw new ApiError("Réponse de rafraîchissement invalide.", 401);
+    updateAccessToken(body.accessToken);
+    return body.accessToken;
+  })().finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
+}
+
+/**
+ * fetch avec Bearer. Sur 401, rafraîchit le token une fois puis rejoue la requête.
+ * Le token utilisé est toujours le plus récent de la session, pas celui capturé par les hooks.
+ */
+async function authorizedFetch(
+  token: string,
+  url: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const send = (value: string) =>
+    fetch(url, { ...init, headers: { ...init.headers, Authorization: `Bearer ${value}` } });
+
+  const used = loadSession()?.accessToken ?? token;
+  const response = await send(used);
+  if (response.status !== 401) return response;
+
+  // Un autre appel a déjà renouvelé le token pendant que celui-ci était en vol.
+  const latest = loadSession()?.accessToken;
+  if (latest && latest !== used) return send(latest);
+
+  try {
+    return await send(await refreshAccessToken());
+  } catch (caught) {
+    if (caught instanceof ApiError && caught.status === 0) throw caught;
+    return response; // 401 d'origine : les hooks déconnectent via onUnauthorized
+  }
+}
+
 export function usageQuery(range: UsageRange, extra?: Record<string, string | undefined>) {
   const params = new URLSearchParams({ from: range.from, to: range.to });
   for (const [key, value] of Object.entries({ environment: range.environment, ...extra })) {
@@ -134,9 +201,7 @@ export function usageQuery(range: UsageRange, extra?: Record<string, string | un
 export async function getUsage<T>(token: string, path: string, query: string): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${fusionBase}${path}?${query}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    response = await authorizedFetch(token, `${fusionBase}${path}?${query}`);
   } catch {
     throw new ApiError(
       "Fusion est injoignable. Vérifie que le serveur tourne sur le port 3000.",
@@ -219,12 +284,9 @@ export async function fetchAuthNames(
     const chunk = ids.slice(index, index + 100);
     let response: Response;
     try {
-      response = await fetch(`${authBase}/api/v1/users/by-ids`, {
+      response = await authorizedFetch(token, `${authBase}/api/v1/users/by-ids`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids: chunk }),
       });
     } catch {
