@@ -24,7 +24,7 @@ type AppSidebarProps = {
   tabCounts: Record<DashboardTab, number | null>;
   onTab: (tab: DashboardTab) => void;
   sessionName: string;
-  onSignOut: () => void;
+  onSignOut?: () => void;
 };
 
 function initials(name: string) {
@@ -97,12 +97,14 @@ export function AppSidebar({ tab, tabCounts, onTab, sessionName, onSignOut }: Ap
               <span>{themeLabel}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton tooltip="Se déconnecter" onClick={onSignOut}>
-              <LogOutIcon />
-              <span>Se déconnecter</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {onSignOut && (
+            <SidebarMenuItem>
+              <SidebarMenuButton tooltip="Se déconnecter" onClick={onSignOut}>
+                <LogOutIcon />
+                <span>Se déconnecter</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
         </SidebarMenu>
       </SidebarFooter>
       <SidebarRail />

@@ -26,7 +26,7 @@ import {
 } from "@/features/overview";
 import { UserDrawer, type UserOption } from "@/features/users";
 import { buildFeatureEntities, FeatureSection, featureUsage, useFeatureUsage } from "@/features/workflows";
-import { logout } from "@/shared/api";
+import { logout, serviceTokenMode } from "@/shared/api";
 import { personName, rangeError } from "@/shared/format";
 import type { ActivityQuery } from "@/shared/insightTypes";
 import { buildPeriods, fillSeries } from "@/shared/periods";
@@ -154,7 +154,7 @@ export function DashboardPage({ session, onLogout }: DashboardPageProps) {
         tabCounts={tabCounts}
         onTab={(next) => update({ tab: next })}
         sessionName={sessionName}
-        onSignOut={() => void signOut()}
+        onSignOut={serviceTokenMode ? undefined : () => void signOut()}
       />
       <SidebarInset>
         <header className="sticky top-0 z-20 flex flex-col gap-4 border-b bg-background/90 px-4 py-3 backdrop-blur">

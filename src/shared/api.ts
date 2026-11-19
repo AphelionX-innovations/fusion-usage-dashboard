@@ -176,7 +176,11 @@ async function authorizedFetch(
   init: RequestInit = {},
 ): Promise<Response> {
   const send = (value: string) =>
-    fetch(url, { ...init, headers: { ...init.headers, Authorization: `Bearer ${value}` } });
+    fetch(url, {
+      ...init,
+      // Mode jeton de service : aucun Bearer côté navigateur, nginx ajoute le jeton.
+      headers: serviceTokenMode ? init.headers : { ...init.headers, Authorization: `Bearer ${value}` },
+    });
 
   const used = loadSession()?.accessToken ?? token;
   const response = await send(used);

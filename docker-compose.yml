@@ -5,7 +5,11 @@ services:
     build: .
     image: fusion-usage-dashboard:latest
     ports:
-      - "3020:80"
+      # BIND_ADDR : 127.0.0.1 si le reverse proxy HTTPS tourne sur la même machine
+      # (le port n'est alors plus joignable en HTTP direct depuis Internet).
+      - "${BIND_ADDR:-0.0.0.0}:3020:80"
     env_file:
       - .env.docker
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped

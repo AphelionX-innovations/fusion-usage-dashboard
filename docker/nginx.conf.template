@@ -1,26 +1,98 @@
+# Ce fichier est inclus dans le contexte http de nginx.
+
+limit_req_zone $binary_remote_addr zone=perip:10m rate=20r/s;
+limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
+limit_req_zone $binary_remote_addr zone=login:10m rate=10r/m;
+limit_req_status 429;
+
+# Journal d'accès avec l'IP réelle du visiteur.
+log_format audit '$remote_addr [$time_local] "$request" $status $body_bytes_sent '
+                 '$request_time "$http_user_agent"';
+
 server {
     listen 80;
     server_name _;
+    server_tokens off;
     root /usr/share/nginx/html;
     index index.html;
+    client_max_body_size 16k;
+
+    access_log /var/log/nginx/access.log audit;
+
+    ${REAL_IP_DIRECTIVES}
+
+    # Liste blanche d'IP (vide = tout le monde).
+    ${ACCESS_DIRECTIVES}
+
+    limit_req zone=perip burst=100 nodelay;
+
+    include /etc/nginx/snippets/headers-base.conf;
+    include /etc/nginx/snippets/headers-csp.conf;
 
     location = /config.js {
-        add_header Cache-Control "no-store";
+        add_header Cache-Control "no-store" always;
+        include /etc/nginx/snippets/headers-base.conf;
+        include /etc/nginx/snippets/headers-csp.conf;
     }
 
-    location /auth-api/ {
-        proxy_pass ${AUTH_API_PROXY}/;
+    # ------------------------------------------------------------------------------
+    # Seules les routes ci-dessous reçoivent le jeton. Tout le reste renvoie 403.
+    # ------------------------------------------------------------------------------
+
+    # auth-api : noms des utilisateurs à partir de leurs ids.
+    location = /auth-api/api/v1/users/by-ids {
+        limit_except POST { deny all; }
+        limit_req zone=perip burst=100 nodelay;
+        limit_req zone=api burst=60 nodelay;
+        add_header Cache-Control "no-store" always;
+        include /etc/nginx/snippets/headers-base.conf;
+
+        proxy_pass ${AUTH_API_PROXY}/api/v1/users/by-ids;
         proxy_ssl_server_name on;
         proxy_set_header Host $proxy_host;
         proxy_set_header Authorization "${AUTH_HEADER}";
         proxy_set_header Content-Type $http_content_type;
+        include /etc/nginx/snippets/proxy-common.conf;
     }
 
-    location /fusion-api/ {
-        proxy_pass ${FUSION_API_PROXY}/;
+    # auth-api : login / 2FA / refresh / logout (fermés en mode SERVICE_TOKEN).
+    location ^~ /auth-api/api/v1/auth/ {
+        ${LOGIN_ACCESS}
+        limit_except POST { deny all; }
+        limit_req zone=perip burst=100 nodelay;
+        limit_req zone=login burst=10 nodelay;
+        add_header Cache-Control "no-store" always;
+        include /etc/nginx/snippets/headers-base.conf;
+
+        proxy_pass ${AUTH_API_PROXY}/api/v1/auth/;
         proxy_ssl_server_name on;
         proxy_set_header Host $proxy_host;
         proxy_set_header Authorization "${AUTH_HEADER}";
+        proxy_set_header Content-Type $http_content_type;
+        include /etc/nginx/snippets/proxy-common.conf;
+    }
+
+    location ^~ /auth-api/ {
+        return 403;
+    }
+
+    # fusion-api : lecture seule des statistiques d'usage.
+    location ^~ /fusion-api/api/auth/usage/ {
+        limit_except GET { deny all; }
+        limit_req zone=perip burst=100 nodelay;
+        limit_req zone=api burst=60 nodelay;
+        add_header Cache-Control "no-store" always;
+        include /etc/nginx/snippets/headers-base.conf;
+
+        proxy_pass ${FUSION_API_PROXY}/api/auth/usage/;
+        proxy_ssl_server_name on;
+        proxy_set_header Host $proxy_host;
+        proxy_set_header Authorization "${AUTH_HEADER}";
+        include /etc/nginx/snippets/proxy-common.conf;
+    }
+
+    location ^~ /fusion-api/ {
+        return 403;
     }
 
     location / {

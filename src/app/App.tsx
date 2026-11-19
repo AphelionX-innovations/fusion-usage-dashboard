@@ -7,9 +7,9 @@ import type { Session } from "@/shared/types";
 
 // Le vrai jeton reste côté serveur (nginx) ; ce Bearer factice est écrasé par le proxy.
 const SERVICE_SESSION: Session = {
-  accessToken: "service-token",
+  accessToken: "server-side",
   refreshToken: "",
-  user: { id: "service", username: "service", isSuperAdmin: true },
+  user: { id: "service", username: "Accès lecture seule", isSuperAdmin: true },
 };
 
 export function App() {
