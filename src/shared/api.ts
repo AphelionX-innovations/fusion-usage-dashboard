@@ -26,6 +26,9 @@ const fusionBase = apiBase(
   "/fusion-api",
 );
 
+/** Mode jeton de service : le proxy nginx injecte le Bearer, aucun login n'est demandé. */
+export const serviceTokenMode = runtime?.SERVICE_TOKEN_MODE === "true";
+
 export class ApiError extends Error {
   status: number;
   code?: string;
@@ -106,6 +109,7 @@ export function verifyTwoFactor(
 }
 
 export async function logout(initial: Session): Promise<void> {
+  if (serviceTokenMode) return; // pas de session utilisateur à fermer
   // Les tokens de la session peuvent avoir été renouvelés depuis le login.
   const session = loadSession() ?? initial;
   try {

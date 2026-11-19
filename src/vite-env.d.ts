@@ -8,6 +8,7 @@ interface ImportMetaEnv {
 interface AppRuntimeConfig {
   VITE_AUTH_API_URL?: string;
   VITE_FUSION_API_URL?: string;
+  SERVICE_TOKEN_MODE?: string;
 }
 
 interface Window {
